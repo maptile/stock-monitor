@@ -1,0 +1,12 @@
+{
+  "name": "stock-monitor",
+  "version": "1.0.0",
+  "description": "Watch China A-share holdings and grid buy/sell signals from the CLI.",
+  "license": "MIT",
+  "bin": {
+    "stock-monitor": "index.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // Entry: parse CLI -> fetch quotes (Tencent/Sina auto-failover) -> print table (default) or JSON (--json).
+// China A-share market only.
 //
 // Usage:
-//   node index.js --ticker=CODE,NAME,COST,SHARES[,TARGET...] [--ticker=...] [--json] [--source=sina,tencent]
+//   node index.js --ticker=CODE,NAME,SHARES@COST[,TARGET...] [--ticker=...] [--json] [--source=sina,tencent]
 // Example:
-//   node index.js --ticker=sh510300,ETF1,4.000,1000,4.400,+10%,3.600 \
-//                 --ticker=sz159915,ETF2,3.000,1000,+5%@3.000,2.700 \
-//                 --ticker=sh518880,GOLD,0,0
+//   node index.js --ticker=sh510300,ETF1,1000@4.000,s10%,sl5%,b3.600 \
+//                 --ticker=sz159915,ETF2,1000@3.000,s5%,b2.700 \
+//                 --ticker=sh601398,ICBC,0,b7,b6
 
 const { parseArgs } = require('./src/args');
 const { fetchPrices } = require('./src/fetch');
@@ -19,11 +20,13 @@ function nowStr() {
 }
 
 function usage() {
-  console.log('Usage: node index.js --ticker=CODE,NAME,COST,SHARES[,TARGET...] [--ticker=...] [--full] [--json]');
-  console.log('  COST,SHARES = 0,0  -> watch only (no P/L)');
-  console.log('  TARGET: 4.400 (abs) | +5% (pct of cost) | +5%@3.000 (pct of given cost) | suffix s/b = force sell/buy');
-  console.log('  default: simple view (holdings P/L%);  --full: full table');
-  console.log('Example: node index.js --ticker=sz159915,ETF,3.000,1000,+5%@3.000,2.700');
+  console.log('Usage: node index.js --ticker=CODE,NAME,SHARES@COST[,TARGET...] [--ticker=...] [--full] [--json]');
+  console.log('  China A-share market only.  SHARES@COST e.g. 8600@4.715;  "0" -> watch only (no P/L)');
+  console.log('  Fields split on commas and/or spaces (pad with spaces to align).');
+  console.log('  TARGET (prefix required; level = % of cost or abs price):');
+  console.log('    s.. sell on rise | b.. buy on fall | sl.. stop-loss sell on fall | bu.. breakout buy on rise');
+  console.log('  default: simple view (signals only);  --full: full table');
+  console.log('Example: node index.js --ticker=sz159915,ETF,1000@3.000,s5%,b2.700,sl2.500');
 }
 
 async function main() {

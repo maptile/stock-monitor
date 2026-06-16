@@ -1,43 +1,77 @@
-// Command-line parsing.
-// Per item:  --ticker=CODE,NAME,COST,SHARES[,TARGET...]
-//   COST/SHARES = 0 -> watch only (no P/L).
-// TARGET tokens (any number), shown in the SIGNAL column when hit;
-// direction is auto (price >= cost = sell, price < cost = buy):
-//   4.400        absolute price
-//   +5%          percent of cost (+ = sell on rise, - = buy on dip)
-//   +5%@3.000    percent of a given cost (per lot)
-//   4.400s / 3.600b   trailing s/b forces sell/buy
-// Options:  --json  --quiet  --source=tencent,sina
+// Command-line parsing. (China A-share market only.)
+// Per item:  --ticker=CODE,NAME,SHARES@COST[,TARGET...]
+//   SHARES@COST is the holding as one field, e.g. 8600@4.715 (8600 shares bought at
+//   4.715) — kept together so it doesn't blur into the target numbers.
+//   "0" (or "0@0", or empty) -> watch only (no P/L).
+//   Fields may be separated by commas and/or spaces (any run), so you can pad with
+//   spaces to align columns (quote the whole arg so the shell keeps the spaces), e.g.
+//     "sh510300, H300, 8600@4.715,  5.067, 5.376, +20%,  4.430, 3.940"
+// TARGET tokens (any number), shown in the SIGNAL column when current price hits.
+// Every target MUST carry one of four prefixes; each fixes a (side, trigger-direction),
+// where up = fires on cur >= level, down = fires on cur <= level:
+//   s..   SELL on a rise  (take-profit)        b..   BUY on a fall  (buy the dip)
+//   sl..  SELL on a fall  (stop-loss)          bu..  BUY on a rise   (breakout)
+// The level is a percent of THIS lot's cost (s/bu above cost, b/sl below) or an absolute
+// price: s4.430, b3.940, sl2.700, bu5.067, s5%, b5%, sl5%, bu5%.
+// A fired SELL/BUY shows the CURRENT price (not the trigger), to avoid mis-orders.
+// Options:  --json  --quiet  --full  --source=tencent,sina
 
+const PREFIX = { sl: ['sell', 'down'], bu: ['buy', 'up'], s: ['sell', 'up'], b: ['buy', 'down'] };
+
+// Parse one target token into a descriptor; resolved against cost later (see calc.js).
 function parseTarget(tok) {
-  let side;
-  const last = tok.slice(-1).toLowerCase();
-  if (last === 's' || last === 'b') {
-    side = last === 's' ? 'sell' : 'buy';
-    tok = tok.slice(0, -1);
+  const raw = tok.trim();
+  let body = raw;
+  let side, dir; // set together when a prefix fixes the side and trigger direction
+  const lower = body.toLowerCase();
+  const key = PREFIX[lower.slice(0, 2)] ? lower.slice(0, 2) : PREFIX[lower[0]] ? lower[0] : null;
+  if (key) {
+    [side, dir] = PREFIX[key];
+    body = body.slice(key.length);
   }
-  let cost;
-  const at = tok.split('@');
-  if (at.length === 2) {
-    tok = at[0];
-    cost = parseFloat(at[1]);
-  }
-  const t = {};
-  if (side) t.side = side;
-  if (cost != null) t.cost = cost;
-  if (tok.endsWith('%')) t.pct = parseFloat(tok) / 100;
-  else t.price = parseFloat(tok);
+  const t = body.endsWith('%')
+    ? { kind: 'pct', mag: Math.abs(parseFloat(body)) / 100, side, raw }
+    : { kind: 'abs', price: parseFloat(body), side, raw };
+  if (dir) t.dir = dir;
   return t;
 }
 
+// Drop targets that can't be resolved, warning once on stderr.
+function keepTarget(t, code, cost) {
+  if (!t.side) {
+    console.error(`warn: target "${t.raw}" on ${code} ignored (needs a prefix: s/b/sl/bu)`);
+    return false;
+  }
+  if (t.kind === 'pct') {
+    if (!isFinite(t.mag) || !(cost > 0)) {
+      console.error(`warn: percent target "${t.raw}" on ${code} ignored (needs a cost > 0)`);
+      return false;
+    }
+    return true;
+  }
+  if (!isFinite(t.price)) {
+    console.error(`warn: target "${t.raw}" on ${code} ignored (not a number)`);
+    return false;
+  }
+  return true;
+}
+
+// Holding field "SHARES@COST" (e.g. 8600@4.715); "0" / "0@0" / "" -> watch only.
+function parseHolding(field) {
+  const [sh, co] = String(field || '').split('@');
+  return { shares: parseInt(sh, 10) || 0, cost: parseFloat(co) || 0 };
+}
+
 function parseTicker(value) {
-  const p = value.split(',');
+  const p = value.split(/[\s,]+/).filter(Boolean); // , and spaces group fields
+  const code = p[0];
+  const { shares, cost } = parseHolding(p[2]);
   return {
-    code: p[0],
-    name: p[1] || p[0],
-    cost: parseFloat(p[2]) || 0,
-    shares: parseInt(p[3], 10) || 0,
-    targets: p.slice(4).filter((s) => s.trim()).map(parseTarget),
+    code,
+    name: p[1] || code,
+    cost,
+    shares,
+    targets: p.slice(3).map(parseTarget).filter((t) => keepTarget(t, code, cost)),
   };
 }
 

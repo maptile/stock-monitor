@@ -25,37 +25,40 @@ function pctStr(p) {
   return (p >= 0 ? '+' : '') + p.toFixed(2) + '%';
 }
 
-// SIGNAL cell: SELL red / BUY green, with target price
-function signalText(sig) {
-  if (!sig) return dim('-');
-  const body = `${sig.side === 'sell' ? 'SELL' : 'BUY'} @${sig.price.toFixed(3)}`;
-  return sig.side === 'sell' ? red(body) : green(body);
+// SIGNAL cell (uncolored): shows the CURRENT price (not the trigger) so you act at the
+// real price, plus the shares to sell on a SELL.
+function signalText(sig, shares, cur) {
+  if (!sig) return '-';
+  const at = isFinite(cur) ? cur.toFixed(3) : sig.price.toFixed(3);
+  const label = sig.side === 'sell' ? 'SELL' : 'BUY';
+  const qty = sig.side === 'sell' && shares > 0 ? ` ${shares.toLocaleString('en-US')}` : '';
+  return `${label}${qty} @${at}`;
 }
 
-// TARGET cell: next grid levels -> B(uy) below / S(ell) above
+// TARGET cell (uncolored): next grid levels -> B(uy) below / S(ell) above
 function targetText(r) {
   const parts = [];
-  if (r.nextBuy != null) parts.push(green('B ' + r.nextBuy.toFixed(3)));
-  if (r.nextSell != null) parts.push(red('S ' + r.nextSell.toFixed(3)));
-  return parts.length ? parts.join(' ') : dim('-');
+  if (r.nextBuy != null) parts.push('B ' + r.nextBuy.toFixed(3));
+  if (r.nextSell != null) parts.push('S ' + r.nextSell.toFixed(3));
+  return parts.length ? parts.join(' ') : '-';
 }
 
 function head(now, sources) {
   return dim(`${now}  src:${sources.join('/') || 'none'}`);
 }
 
-// ── simple view: holdings only, name + P/L% (+ signal if any) ──
+// ── simple view: only rows with a fired buy/sell signal, name + P/L% + signal ──
 function renderSimple(rows, now, sources) {
-  const held = rows.filter((r) => r.pnlPct != null);
+  const hits = rows.filter((r) => r.signal);
   const out = [head(now, sources)];
-  if (!held.length) {
-    out.push(dim('(no holdings)'));
+  if (!hits.length) {
+    out.push(dim('(no signals)'));
     return out.join('\n');
   }
-  const nameW = Math.max(...held.map((r) => r.name.length));
-  held.forEach((r) => {
-    const sig = r.signal ? '  ' + signalText(r.signal) : '';
-    out.push(`${pad(r.name, nameW)}  ${pad(bySign(r.pnlPct, pctStr(r.pnlPct)), 8, 'right')}${sig}`);
+  const nameW = Math.max(...hits.map((r) => r.name.length));
+  hits.forEach((r) => {
+    const pct = r.pnlPct == null ? '' : bySign(r.pnlPct, pctStr(r.pnlPct)); // blank for watch-only
+    out.push(`${pad(r.name, nameW)}  ${pad(pct, 8, 'right')}  ${signalText(r.signal, r.shares, r.cur)}`);
   });
   return out.join('\n');
 }
@@ -70,7 +73,7 @@ function renderRow(r, w) {
   const amt = pad(r.pnlAmt == null ? '' : bySign(r.pnlAmt, (r.pnlAmt >= 0 ? '+' : '') + Math.round(r.pnlAmt).toLocaleString('en-US')), w.amt, 'right');
   const pct = pad(r.pnlPct == null ? '' : bySign(r.pnlPct, pctStr(r.pnlPct)), w.pct, 'right');
   const tgt = pad(targetText(r), w.tgt);
-  return `${code} ${name} ${price} ${cost} ${amt} ${pct}  ${tgt}  ${signalText(r.signal)}`;
+  return `${code} ${name} ${price} ${cost} ${amt} ${pct}  ${tgt}  ${signalText(r.signal, r.shares, r.cur)}`;
 }
 
 function renderTable(rows, now, sources) {
@@ -103,7 +106,7 @@ function buildJson(rows, now, sources) {
       pnlPct: r.pnlPct == null ? null : Number(r.pnlPct.toFixed(2)),
       nextBuy: r.nextBuy,
       nextSell: r.nextSell,
-      signal: r.signal ? { side: r.signal.side, target: r.signal.price, note: r.signal.note } : null,
+      signal: r.signal ? { side: r.signal.side, target: r.signal.price, shares: r.signal.side === 'sell' ? r.shares : null } : null,
     })),
   };
 }
