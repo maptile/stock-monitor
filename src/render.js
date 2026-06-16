@@ -50,11 +50,8 @@ function head(now, sources) {
 // ── simple view: only rows with a fired buy/sell signal, name + P/L% + signal ──
 function renderSimple(rows, now, sources) {
   const hits = rows.filter((r) => r.signal);
+  if (!hits.length) return ''; // no signals -> print nothing (not even the header)
   const out = [head(now, sources)];
-  if (!hits.length) {
-    out.push(dim('(no signals)'));
-    return out.join('\n');
-  }
   const nameW = Math.max(...hits.map((r) => r.name.length));
   hits.forEach((r) => {
     const pct = r.pnlPct == null ? '' : bySign(r.pnlPct, pctStr(r.pnlPct)); // blank for watch-only

@@ -43,7 +43,8 @@ async function main() {
   if (opts.json) process.stdout.write(JSON.stringify(buildJson(rows, when, sources), null, 2) + '\n');
   else if (!opts.quiet) {
     const view = opts.full ? renderTable : renderSimple;
-    process.stdout.write(view(rows, when, sources) + '\n');
+    const out = view(rows, when, sources);
+    if (out) process.stdout.write(out + '\n');
   }
 }
 

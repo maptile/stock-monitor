@@ -30,9 +30,9 @@ test('simple view: only rows with a signal are shown', () => {
   assert.ok(out.includes('SELLER'));
 });
 
-test('simple view: no signals -> "(no signals)"', () => {
+test('simple view: no signals -> empty output (nothing printed)', () => {
   const out = renderSimple([row({ signal: null })], 'now', ['tencent']);
-  assert.ok(out.includes('(no signals)'));
+  assert.equal(out, '');
 });
 
 test('SELL shows shares and the CURRENT price (not the trigger)', () => {
