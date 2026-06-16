@@ -1,0 +1,8 @@
+# your personal launcher with real holdings — keep local, do not publish
+watch.sh
+
+# runtime logs / data
+*.log
+*.csv
+
+node_modules/
