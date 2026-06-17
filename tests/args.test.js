@@ -44,6 +44,14 @@ test('parseTicker: SHARES@COST holding field', () => {
   assert.equal(it.targets.length, 1);
 });
 
+test('parseTicker: a leading * marks the row starred and is stripped from the code', () => {
+  const it = parseTicker('*sh510300,H300,8600@4.715,s5.067');
+  assert.equal(it.code, 'sh510300'); // * removed -> real code used for quotes
+  assert.equal(it.starred, true);
+  const plain = parseTicker('sh510300,H300,8600@4.715');
+  assert.equal(plain.starred, false);
+});
+
 test('parseTicker: "0" and "0@0" mean watch-only', () => {
   for (const h of ['0', '0@0']) {
     const it = parseTicker(`sh601398,ICBC,${h}`);

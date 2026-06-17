@@ -40,14 +40,18 @@ function targetsOf(item, cur) {
 // Compute a single item
 function evalItem(item, q) {
   const cur = q ? q.price : NaN;
+  const prevClose = q ? q.prevClose : NaN;
   const held = item.shares > 0 && item.cost > 0 && isFinite(cur);
+  const hasDay = isFinite(cur) && isFinite(prevClose) && prevClose > 0;
   const t = isFinite(cur) ? targetsOf(item, cur) : { hit: null, nextSell: null, nextBuy: null };
   return {
     code: item.code,
     name: item.name,
+    starred: !!item.starred,
     cost: item.cost > 0 ? item.cost : null,
     shares: item.shares,
     cur,
+    dayPct: hasDay ? (cur / prevClose - 1) * 100 : null, // today's change vs prev close
     pnlAmt: held ? item.shares * (cur - item.cost) : null,
     pnlPct: held ? (cur / item.cost - 1) * 100 : null,
     signal: t.hit,

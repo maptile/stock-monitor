@@ -1,5 +1,7 @@
 // Command-line parsing. (China A-share market only.)
-// Per item:  --ticker=CODE,NAME,SHARES@COST[,TARGET...]
+// Per item:  --ticker=[*]CODE,NAME,SHARES@COST[,TARGET...]
+//   A leading * on the code (e.g. *sh510300) flags the row: when any ticker is starred,
+//   the table gains a leading * column marking the flagged row(s).
 //   SHARES@COST is the holding as one field, e.g. 8600@4.715 (8600 shares bought at
 //   4.715) — kept together so it doesn't blur into the target numbers.
 //   "0" (or "0@0", or empty) -> watch only (no P/L).
@@ -14,7 +16,7 @@
 // The level is a percent of THIS lot's cost (s/bu above cost, b/sl below) or an absolute
 // price: s4.430, b3.940, sl2.700, bu5.067, s5%, b5%, sl5%, bu5%.
 // A fired SELL/BUY shows the CURRENT price (not the trigger), to avoid mis-orders.
-// Options:  --json  --quiet  --full  --source=tencent,sina
+// Options:  --json  --quiet  --full (-f)  --source=tencent,sina
 
 const PREFIX = { sl: ['sell', 'down'], bu: ['buy', 'up'], s: ['sell', 'up'], b: ['buy', 'down'] };
 
@@ -64,13 +66,15 @@ function parseHolding(field) {
 
 function parseTicker(value) {
   const p = value.split(/[\s,]+/).filter(Boolean); // , and spaces group fields
-  const code = p[0];
+  const starred = p[0].startsWith('*'); // leading * on the code = watch closely (highlight)
+  const code = starred ? p[0].slice(1) : p[0];
   const { shares, cost } = parseHolding(p[2]);
   return {
     code,
     name: p[1] || code,
     cost,
     shares,
+    starred,
     targets: p.slice(3).map(parseTarget).filter((t) => keepTarget(t, code, cost)),
   };
 }
@@ -82,7 +86,7 @@ function parseArgs(argv) {
     if (a.startsWith('--ticker=')) items.push(parseTicker(a.slice(9)));
     else if (a === '--json') opts.json = true;
     else if (a === '--quiet') opts.quiet = true;
-    else if (a === '--full') opts.full = true;
+    else if (a === '--full' || a === '-f') opts.full = true;
     else if (a.startsWith('--source=')) opts.source = a.slice(9).split(',');
   }
   return { items, opts };

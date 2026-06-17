@@ -20,12 +20,13 @@ function nowStr() {
 }
 
 function usage() {
-  console.log('Usage: node index.js --ticker=CODE,NAME,SHARES@COST[,TARGET...] [--ticker=...] [--full] [--json]');
+  console.log('Usage: node index.js --ticker=CODE,NAME,SHARES@COST[,TARGET...] [--ticker=...] [--full|-f] [--json]');
   console.log('  China A-share market only.  SHARES@COST e.g. 8600@4.715;  "0" -> watch only (no P/L)');
   console.log('  Fields split on commas and/or spaces (pad with spaces to align).');
+  console.log('  Prefix the code with * (e.g. *sh510300) to flag it; a * column is then shown for it.');
   console.log('  TARGET (prefix required; level = % of cost or abs price):');
   console.log('    s.. sell on rise | b.. buy on fall | sl.. stop-loss sell on fall | bu.. breakout buy on rise');
-  console.log('  default: simple view (signals only);  --full: full table');
+  console.log('  default: simple view (signals only);  --full/-f: full table');
   console.log('Example: node index.js --ticker=sz159915,ETF,1000@3.000,s5%,b2.700,sl2.500');
 }
 

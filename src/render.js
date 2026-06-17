@@ -47,45 +47,78 @@ function head(now, sources) {
   return dim(`${now}  src:${sources.join('/') || 'none'}`);
 }
 
+// Leading star column: only present when some row is starred ("watch closely"); the
+// starred rows get a '*', the rest a blank of the same width to keep columns aligned.
+function starCell(anyStar, starred) {
+  return anyStar ? (starred ? '* ' : '  ') : '';
+}
+
 // ── simple view: only rows with a fired buy/sell signal, name + P/L% + signal ──
 function renderSimple(rows, now, sources) {
   const hits = rows.filter((r) => r.signal);
   if (!hits.length) return ''; // no signals -> print nothing (not even the header)
+  const anyStar = rows.some((r) => r.starred);
   const out = [head(now, sources)];
   const nameW = Math.max(...hits.map((r) => r.name.length));
   hits.forEach((r) => {
     const pct = r.pnlPct == null ? '' : bySign(r.pnlPct, pctStr(r.pnlPct)); // blank for watch-only
-    out.push(`${pad(r.name, nameW)}  ${pad(pct, 8, 'right')}  ${signalText(r.signal, r.shares, r.cur)}`);
+    out.push(`${starCell(anyStar, r.starred)}${pad(r.name, nameW)}  ${pad(pct, 8, 'right')}  ${signalText(r.signal, r.shares, r.cur)}`);
   });
   return out.join('\n');
 }
 
-// ── full table ──
-function renderRow(r, w) {
+// ── full table ── (one value per column)
+function priceText(r) {
+  return isFinite(r.cur) ? r.cur.toFixed(3) : dim('N/A');
+}
+function dayText(r) {
+  return r.dayPct == null ? '' : bySign(r.dayPct, pctStr(r.dayPct)); // today's change %
+}
+function sharesText(r) {
+  return r.shares > 0 ? r.shares.toLocaleString('en-US') : ''; // blank for watch-only
+}
+function costText(r) {
+  return r.cost == null ? '' : r.cost.toFixed(3);
+}
+function amtText(r) {
+  return r.pnlAmt == null ? '' : bySign(r.pnlAmt, (r.pnlAmt >= 0 ? '+' : '') + Math.round(r.pnlAmt).toLocaleString('en-US'));
+}
+function pnlPctText(r) {
+  return r.pnlPct == null ? '' : bySign(r.pnlPct, pctStr(r.pnlPct));
+}
+
+function renderRow(r, w, anyStar) {
+  const star = starCell(anyStar, r.starred);
   const code = pad(num6(r.code), w.code);
   const name = pad(r.name, w.name);
-  if (!isFinite(r.cur)) return `${code} ${name} ${pad(dim('N/A'), w.price, 'right')}`;
-  const price = pad(r.cur.toFixed(3), w.price, 'right');
-  const cost = pad(r.cost == null ? '' : r.cost.toFixed(3), w.cost, 'right');
-  const amt = pad(r.pnlAmt == null ? '' : bySign(r.pnlAmt, (r.pnlAmt >= 0 ? '+' : '') + Math.round(r.pnlAmt).toLocaleString('en-US')), w.amt, 'right');
-  const pct = pad(r.pnlPct == null ? '' : bySign(r.pnlPct, pctStr(r.pnlPct)), w.pct, 'right');
+  const price = pad(priceText(r), w.price, 'right');
+  const day = pad(dayText(r), w.day, 'right');
+  const shares = pad(sharesText(r), w.shares, 'right');
+  const cost = pad(costText(r), w.cost, 'right');
+  const amt = pad(amtText(r), w.amt, 'right');
+  const pct = pad(pnlPctText(r), w.pct, 'right');
   const tgt = pad(targetText(r), w.tgt);
-  return `${code} ${name} ${price} ${cost} ${amt} ${pct}  ${tgt}  ${signalText(r.signal, r.shares, r.cur)}`;
+  return `${star}${code} ${name} ${price} ${day} ${shares} ${cost} ${amt} ${pct}  ${tgt}  ${signalText(r.signal, r.shares, r.cur)}`;
 }
 
 function renderTable(rows, now, sources) {
+  const anyStar = rows.some((r) => r.starred);
+  const widest = (label, cell) => Math.max(label.length, ...rows.map((r) => stripAnsi(cell(r)).length));
   const w = {
     code: 6,
     name: Math.max(4, ...rows.map((r) => r.name.length)),
-    price: 8,
-    cost: 8,
-    amt: 11,
-    pct: 9,
+    price: widest('PRICE', priceText),
+    day: widest('DAY%', dayText),
+    shares: widest('SHARES', sharesText),
+    cost: widest('COST', costText),
+    amt: widest('P/L', amtText),
+    pct: widest('P/L%', pnlPctText),
     tgt: 16,
   };
   const out = [head(now, sources)];
-  out.push(dim(`${pad('CODE', w.code)} ${pad('NAME', w.name)} ${pad('PRICE', w.price, 'right')} ${pad('COST', w.cost, 'right')} ${pad('P/L', w.amt, 'right')} ${pad('P/L%', w.pct, 'right')}  ${pad('TARGET', w.tgt)}  SIGNAL`));
-  rows.forEach((r) => out.push(renderRow(r, w)));
+  const sh = anyStar ? '  ' : ''; // blank header over the star column
+  out.push(dim(`${sh}${pad('CODE', w.code)} ${pad('NAME', w.name)} ${pad('PRICE', w.price, 'right')} ${pad('DAY%', w.day, 'right')} ${pad('SHARES', w.shares, 'right')} ${pad('COST', w.cost, 'right')} ${pad('P/L', w.amt, 'right')} ${pad('P/L%', w.pct, 'right')}  ${pad('TARGET', w.tgt)}  SIGNAL`));
+  rows.forEach((r) => out.push(renderRow(r, w, anyStar)));
   return out.join('\n');
 }
 
@@ -97,8 +130,10 @@ function buildJson(rows, now, sources) {
     items: rows.map((r) => ({
       code: num6(r.code),
       name: r.name,
+      starred: !!r.starred,
       cost: r.cost,
       price: r.cur,
+      dayPct: r.dayPct == null ? null : Number(r.dayPct.toFixed(2)),
       pnlAmount: r.pnlAmt == null ? null : Math.round(r.pnlAmt),
       pnlPct: r.pnlPct == null ? null : Number(r.pnlPct.toFixed(2)),
       nextBuy: r.nextBuy,
